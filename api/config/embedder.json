@@ -1,11 +1,43 @@
 {
   "embedder": {
-    "client_class": "OpenAIClient",
-    "batch_size": 500,
+    "client_class": "QwenClient",
+    "initialize_kwargs": {
+      "api_key": "${QWEN_API_KEY}",
+      "base_url": "${QWEN_API_BASE_URL}"
+    },
+    "batch_size": 10,
     "model_kwargs": {
-      "model": "text-embedding-3-small",
+      "model": "text-embedding-v3",
       "dimensions": 256,
       "encoding_format": "float"
+    }
+  },
+  "embedder_openai": {
+    "client_class": "OpenAIClient",
+    "initialize_kwargs": {
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_BASE_URL}"
+    },
+    "model_kwargs": {
+      "model": "text-embedding-v3",
+      "dimensions": 256,
+      "encoding_format": "float"
+    }
+  },
+  "embedder_ollama": {
+    "client_class": "OllamaClient",
+    "model_kwargs": {
+      "model": "nomic-embed-text"
+    }
+  },
+  "embedder_qwen": {
+    "client_class": "QwenClient",
+    "initialize_kwargs": {
+      "api_key": "${QWEN_API_KEY}",
+      "base_url": "${QWEN_API_BASE_URL}"
+    },
+    "model_kwargs": {
+      "model": "text-embedding-v1"
     }
   },
   "retriever": {

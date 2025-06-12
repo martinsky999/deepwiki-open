@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 from api.openai_client import OpenAIClient
 from api.openrouter_client import OpenRouterClient
 from api.bedrock_client import BedrockClient
+from api.qwen_client import QwenClient
 from adalflow import GoogleGenAIClient, OllamaClient
 
 # Get API keys from environment variables
@@ -20,6 +21,8 @@ AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.environ.get('AWS_REGION')
 AWS_ROLE_ARN = os.environ.get('AWS_ROLE_ARN')
+QWEN_API_KEY = os.environ.get('QWEN_API_KEY')
+QWEN_API_BASE_URL = os.environ.get('QWEN_API_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
 
 # Set keys in environment (in case they're needed elsewhere in the code)
 if OPENAI_API_KEY:
@@ -36,6 +39,10 @@ if AWS_REGION:
     os.environ["AWS_REGION"] = AWS_REGION
 if AWS_ROLE_ARN:
     os.environ["AWS_ROLE_ARN"] = AWS_ROLE_ARN
+if QWEN_API_KEY:
+    os.environ["QWEN_API_KEY"] = QWEN_API_KEY
+if QWEN_API_BASE_URL:
+    os.environ["QWEN_API_BASE_URL"] = QWEN_API_BASE_URL
 
 # Wiki authentication settings
 raw_auth_mode = os.environ.get('DEEPWIKI_AUTH_MODE', 'False')
@@ -51,7 +58,8 @@ CLIENT_CLASSES = {
     "OpenAIClient": OpenAIClient,
     "OpenRouterClient": OpenRouterClient,
     "OllamaClient": OllamaClient,
-    "BedrockClient": BedrockClient
+    "BedrockClient": BedrockClient,
+    "QwenClient": QwenClient
 }
 
 def replace_env_placeholders(config: Union[Dict[str, Any], List[Any], str, Any]) -> Union[Dict[str, Any], List[Any], str, Any]:
@@ -119,13 +127,14 @@ def load_generator_config():
             if provider_config.get("client_class") in CLIENT_CLASSES:
                 provider_config["model_client"] = CLIENT_CLASSES[provider_config["client_class"]]
             # Fall back to default mapping based on provider_id
-            elif provider_id in ["google", "openai", "openrouter", "ollama", "bedrock"]:
+            elif provider_id in ["google", "openai", "openrouter", "ollama", "bedrock", "qwen"]:
                 default_map = {
                     "google": GoogleGenAIClient,
                     "openai": OpenAIClient,
                     "openrouter": OpenRouterClient,
                     "ollama": OllamaClient,
-                    "bedrock": BedrockClient
+                    "bedrock": BedrockClient,
+                    "qwen": QwenClient
                 }
                 provider_config["model_client"] = default_map[provider_id]
             else:

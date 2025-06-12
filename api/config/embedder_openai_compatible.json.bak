@@ -18,6 +18,16 @@
       "model": "nomic-embed-text"
     }
   },
+  "embedder_qwen": {
+    "client_class": "QwenClient",
+    "initialize_kwargs": {
+      "api_key": "${QWEN_API_KEY}",
+      "base_url": "${QWEN_API_BASE_URL}"
+    },
+    "model_kwargs": {
+      "model": "text-embedding-v1"
+    }
+  },
   "retriever": {
     "top_k": 20
   },

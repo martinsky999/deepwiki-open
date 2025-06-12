@@ -1,21 +1,29 @@
+"""Chat API for DeepWiki."""
+
 import logging
 import os
-from typing import List, Optional
+import re
+import time
+import json
+import asyncio
+from typing import List, Dict, Any, Optional, Tuple, Generator, AsyncGenerator, Union
+from datetime import datetime
 from urllib.parse import unquote
 
 import google.generativeai as genai
 from adalflow.components.model_client.ollama_client import OllamaClient
 from adalflow.core.types import ModelType
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from api.config import get_model_config, configs, OPENROUTER_API_KEY, OPENAI_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+from api.config import get_model_config, configs, OPENROUTER_API_KEY, OPENAI_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, QWEN_API_KEY
 from api.data_pipeline import count_tokens, get_file_content
 from api.openai_client import OpenAIClient
 from api.openrouter_client import OpenRouterClient
 from api.bedrock_client import BedrockClient
+from api.qwen_client import QwenClient
 from api.rag import RAG
 
 # Configure logging
@@ -507,6 +515,28 @@ This file contains...
                 model_kwargs=model_kwargs,
                 model_type=ModelType.LLM
             )
+        elif request.provider == "qwen":
+            logger.info(f"Using Qwen protocol with model: {request.model}")
+
+            # Check if an API key is set for Qwen
+            if not QWEN_API_KEY:
+                logger.warning("QWEN_API_KEY not configured, but continuing with request")
+                # We'll let the QwenClient handle this and return an error message
+
+            # Initialize Qwen client
+            model = QwenClient()
+            model_kwargs = {
+                "model": request.model,
+                "stream": True,
+                "temperature": model_config["temperature"],
+                "top_p": model_config["top_p"]
+            }
+
+            api_kwargs = model.convert_inputs_to_api_kwargs(
+                input=prompt,
+                model_kwargs=model_kwargs,
+                model_type=ModelType.LLM
+            )
         else:
             # Initialize Google Generative AI model
             model = genai.GenerativeModel(
@@ -530,6 +560,23 @@ This file contains...
                         if text and not text.startswith('model=') and not text.startswith('created_at='):
                             text = text.replace('<think>', '').replace('</think>', '')
                             yield text
+                elif request.provider == "qwen":
+                    try:
+                        # Get the response and handle it properly using the previously created api_kwargs
+                        logger.info("Making Qwen API call")
+                        response = await model.acall(api_kwargs=api_kwargs, model_type=ModelType.LLM)
+                        # Handle streaming response from Qwen (similar to OpenAI)
+                        async for chunk in response:
+                            choices = getattr(chunk, "choices", [])
+                            if len(choices) > 0:
+                                delta = getattr(choices[0], "delta", None)
+                                if delta is not None:
+                                    text = getattr(delta, "content", None)
+                                    if text is not None:
+                                        yield text
+                    except Exception as e_qwen:
+                        logger.error(f"Error with Qwen API: {str(e_qwen)}")
+                        yield f"\nError with Qwen API: {str(e_qwen)}\n\nPlease check that you have set the QWEN_API_KEY environment variable with a valid API key."
                 elif request.provider == "openrouter":
                     try:
                         # Get the response and handle it properly using the previously created api_kwargs
@@ -681,6 +728,31 @@ This file contains...
                             except Exception as e_fallback:
                                 logger.error(f"Error with AWS Bedrock API fallback: {str(e_fallback)}")
                                 yield f"\nError with AWS Bedrock API fallback: {str(e_fallback)}\n\nPlease check that you have set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables with valid credentials."
+                        elif request.provider == "qwen":
+                            try:
+                                # Create new api_kwargs with the simplified prompt
+                                fallback_api_kwargs = model.convert_inputs_to_api_kwargs(
+                                    input=simplified_prompt,
+                                    model_kwargs=model_kwargs,
+                                    model_type=ModelType.LLM
+                                )
+
+                                # Get the response using the simplified prompt
+                                logger.info("Making fallback Qwen API call")
+                                fallback_response = await model.acall(api_kwargs=fallback_api_kwargs, model_type=ModelType.LLM)
+
+                                # Handle streaming fallback_response from Qwen
+                                async for chunk in fallback_response:
+                                    choices = getattr(chunk, "choices", [])
+                                    if len(choices) > 0:
+                                        delta = getattr(choices[0], "delta", None)
+                                        if delta is not None:
+                                            text = getattr(delta, "content", None)
+                                            if text is not None:
+                                                yield text
+                            except Exception as e_fallback:
+                                logger.error(f"Error with Qwen API fallback: {str(e_fallback)}")
+                                yield f"\nError with Qwen API fallback: {str(e_fallback)}\n\nPlease check that you have set the QWEN_API_KEY environment variable with a valid API key."
                         else:
                             # Initialize Google Generative AI model
                             model_config = get_model_config(request.provider, request.model)

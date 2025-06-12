@@ -90,6 +90,7 @@ yarn install
 
 # 启动Web应用
 npm run dev
+npx next dev --turbopack --port 3000
 # 或
 yarn dev
 ```
